@@ -6,68 +6,69 @@ namespace MyAllocator
 {
     public partial class Form1 : Form
     {
-        private MyAllocator _allocator;
-        private IntPtr _allocatedPtr;
+        private MyAllocator allocator;
+        private Timer timer;
+
 
         public Form1()
         {
             InitializeComponent();
-            _allocator = new MyAllocator(1024);
+            allocator = new MyAllocator();
+            timer = new Timer();
+            timer.Interval = 1000; // обновлять информацию каждую секунду
+            timer.Tick += UpdateLabels; // метод UpdateLabels будет вызываться по таймеру
+            timer.Start();
+        }
+        private void UpdateLabels(object sender, EventArgs e)
+        {
+            // обновляем информацию на Label-элементах
+            usedMemLabel.Text = "Используется памяти: " + allocator.UsedMemory.ToString() + " байт";
+            freeMemLabel.Text = "Свободно памяти: " + allocator.FreeMemory.ToString() + " байт";
         }
 
 
-
-        public class MyAllocator
+        class MyAllocator
         {
-            private int _pageSize;
-            private byte[][] _chunks = null;
-            private int _curChunkIdx = -1;
-            private int _curByteIdx = 0;
+            private byte[] memory;
+            private int pointer;
 
+            public int UsedMemory { get { return pointer; } }
+            public int FreeMemory { get { return memory.Length - pointer; } }
 
-            public MyAllocator(int pageSize)
+            public MyAllocator()
             {
-                _pageSize = pageSize;
+                // выделяем 1 мегабайт памяти
+                memory = new byte[1024 * 1024];
+                pointer = 0;
             }
 
-            public IntPtr Alloc(int size)
+            public int Alloc(int size)
             {
-                if (_chunks == null || _curByteIdx + size > _pageSize)
-                {
-                    _chunks = new byte[10][];
-                    for (int i = 0; i < 10; i++)
-                    {
-                        _chunks[i] = new byte[_pageSize];
-                    }
-                    _curChunkIdx = 0;
-                    _curByteIdx = 0;
-                }
+                if (pointer + size > memory.Length)
+                    throw new OutOfMemoryException("Недостаточно памяти");
 
-                IntPtr ptr = new IntPtr(BitConverter.ToInt32(_chunks[_curChunkIdx], 0) + _curByteIdx);
-                _curByteIdx += size;
-                if (_curByteIdx >= _pageSize)
-                {
-                    _curChunkIdx++;
-                    _curByteIdx = 0;
-                }
-                return ptr;
+                int address = pointer;
+                pointer += size;
+                return address;
             }
 
-
-
+            public void Free()
+            {
+                // освобождаем память путем просто установки указателя на начало
+                pointer = 0;
+            }
         }
 
         private void AllocButton_Click(object sender, EventArgs e)
         {
-            int size;
-            if (!int.TryParse(sizeTextBox.Text, out size))
-            {
-                MessageBox.Show("Недопустимый размер");
-                return;
-            }
+            int size = int.Parse(sizeTextBox.Text);
+            int address = allocator.Alloc(size);
+            addressLabel.Text = "Адрес выделенной памяти: 0x" + address.ToString("X");
+        }
 
-            _allocatedPtr = _allocator.Alloc(size);
-            MessageBox.Show($"Память, выделенная по адресу {_allocatedPtr.ToInt32()}");
+        private void freeButton_Click(object sender, EventArgs e)
+        {
+            allocator.Free();
         }
     }
     
